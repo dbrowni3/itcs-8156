@@ -145,7 +145,7 @@ def test():
     #Input stock name
     sn = "aadr" 
     f = r'D:\Desktop\College Spring 2023\machineLearning\project\coding\data'
-    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,True)
+    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False)
 
 
     # print(X_train)
