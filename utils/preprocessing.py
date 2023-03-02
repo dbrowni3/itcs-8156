@@ -31,7 +31,10 @@ def del_OI(df_sorted):
 def std_vol(df_dropped):
     
     scaled_features = df_dropped.copy()
-    col_names = ['Volume']
+    col_names = df_dropped.columns.values
+    col_names = np.delete(col_names,np.argwhere(col_names=='Date'))
+    col_names = np.delete(col_names,np.argwhere(col_names=='Close'))
+    # col_names = ['Volume']
     features = scaled_features[col_names]
     scaler = StandardScaler().fit(features.values)
     features = scaler.transform(features.values)
@@ -148,7 +151,7 @@ def test():
     X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False)
 
 
-    # print(X_train)
+    print(X_train)
 
 if __name__ == "__main__":
     test()
