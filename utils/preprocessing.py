@@ -141,6 +141,76 @@ def  market_prepro(f,st,sn,verbose=False):
     return X_train, X_test, T_train, T_test
 
 
+def structure_timeseries_features(df,offset_back, offset_for,exclude):
+    '''
+    This takes a dataframe and creates new columns that contain the data from
+    previous days so that time series forecasting can occur.
+
+    INPUTS:
+        df - dataframe: input data
+
+        offset_back - int: the number of days to go back. This creates this many
+                        new columns
+
+        offset_for - int: the number of days to go forwards. This creates this many
+                        new columns
+
+        exclude - list str: list of columns to exclude from the time series 
+                            expansion
+
+    OUTPUTS:
+        df_out - dataframe: dataframe with new columns
+    '''
+
+    df_out = pd.DataFrame() 
+
+    for cc in df.columns.values:
+        if (cc not in exclude):
+            for ii in range(offset_back):
+                col_name = (cc+"_m"+str(ii+1))
+
+                df_out[col_name] = df[cc].shift(ii+1)
+
+
+    df_out = df_out.iloc[offset_back:-offset_for,:]
+
+    return df_out
+
+def structure_timeseries_targets(df,offset_back, offset_for):
+    '''
+    companion function to remove the first few days of targets to make sure
+    the sizes match between features and targets. Also offset the data for
+    multi day targets
+
+    INPUTS:
+        df - dataframe: input data targets.
+
+        offset_back - int: the number of days to go back. This creates this many
+                        new columns
+                        
+        offset_for - int: the number of days to go forwards. This creates this many
+                        new columns
+
+    OUTPUTS:
+        df_out - dataframe: dataframe with rows removed
+
+    '''
+    # df_out = df.iloc[offset:]
+
+    df_out = pd.DataFrame() 
+
+    # for cc in df.columns.values:
+    for ii in range(offset_for):
+        col_name = (df.name+"_p"+str(ii))
+
+        df_out[col_name] = df.shift(-(ii))
+
+
+    df_out = df_out.iloc[offset_back:-offset_for,:]
+
+    return df_out
+
+
 def test():
     # st = "Stocks"
     st = "ETFs"
