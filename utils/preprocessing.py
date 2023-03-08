@@ -117,13 +117,13 @@ def split_data(df_end_quart):
 
     return X_train, X_test, T_train, T_test
 
-def  market_prepro(f,st,sn,verbose=False):
+def  market_prepro(f,st,sn,verbose=False,splitdata=True):
     df = get_data(f,st,sn) #get the dataset imported 
     df_dropped = del_OI(df)
     df_scaled = std_vol(df_dropped)
     df_added = get_daily_deltas(df_scaled)
     df_end_quart = near_end_quart(df_added)
-    X_train, X_test, T_train, T_test = split_data(df_end_quart)
+
 
     if verbose == True:
         print(df_end_quart.head())
@@ -138,7 +138,13 @@ def  market_prepro(f,st,sn,verbose=False):
         sns.pairplot(df_end_quart)
         plt.show()
 
-    return X_train, X_test, T_train, T_test
+    if (splitdata == True):
+        X_train, X_test, T_train, T_test = split_data(df_end_quart)
+        return X_train, X_test, T_train, T_test
+    else:
+        X = df_end_quart.drop(labels=["Close"], axis=1)
+        T = df_end_quart["Close"]
+        return X, T
 
 
 def structure_timeseries_features(df,offset_back, offset_for,exclude):
@@ -218,10 +224,14 @@ def test():
     #Input stock name
     sn = "aadr" 
     f = r'D:\Desktop\College Spring 2023\machineLearning\project\coding\data'
-    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False)
+    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False,splitdata=True)
+    X,T = market_prepro(f,st,sn,False,splitdata=False)
 
+    print(len(X))
+    print(len(T))
 
-    print(X_train)
+    print(len(X_train))
+    print(len(T_train))
 
 if __name__ == "__main__":
     test()
