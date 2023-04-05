@@ -6,6 +6,7 @@ from torch.utils.data import TensorDataset, DataLoader
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger as TensorBoardLogger
+import tensorboard
 
 import numpy as np
 
@@ -115,13 +116,19 @@ class BasicLSTM(pl.LightningModule):
         long_mem = torch.zeros(self.num_hiddens)
         short_mem = torch.zeros(self.num_hiddens)
         
+        h_i=[]
+        c_i=[]
+        x_i=[]
         for ii in range(0,n_seq):
 
             long_mem, short_mem = self.unit(input[:,ii], 
                                                     long_mem, 
                                                     short_mem,
                                                     )
-        return long_mem
+            x_i.append(input[:,ii])
+            h_i.append(short_mem)
+            c_i.append(long_mem)
+        return long_mem, h_i, c_i, x_i
 
 
     def configure_optimizers(self):
@@ -140,7 +147,7 @@ class BasicLSTM(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         input_i, label_i = batch
-        output_i = self.forward(input_i[0])
+        output_i, h_i, c_i, x_i = self.forward(input_i[0])
 
         test_loss = (output_i - label_i)**2
 
