@@ -116,19 +116,21 @@ class BasicLSTM(pl.LightningModule):
         long_mem = torch.zeros(self.num_hiddens)
         short_mem = torch.zeros(self.num_hiddens)
         
-        h_i=[]
-        c_i=[]
-        x_i=[]
+        h_hist=np.zeros(n_seq)
+        c_hist=np.zeros(n_seq)
+        x_hist=np.zeros(n_seq)
+
         for ii in range(0,n_seq):
 
             long_mem, short_mem = self.unit(input[:,ii], 
                                                     long_mem, 
                                                     short_mem,
                                                     )
-            x_i.append(input[:,ii])
-            h_i.append(short_mem)
-            c_i.append(long_mem)
-        return long_mem, h_i, c_i, x_i
+            h_hist[ii] = (short_mem.detach().numpy())
+            c_hist[ii] = (long_mem.detach().numpy())
+            x_hist[ii] = (input[:,ii].numpy())
+
+        return short_mem, h_hist, c_hist, x_hist
 
 
     def configure_optimizers(self):
@@ -137,7 +139,7 @@ class BasicLSTM(pl.LightningModule):
     def training_step(self, batch, batch_indx):
 
         input_i, label_i = batch
-        output_i = self.forward(input_i[0])
+        output_i = self.forward(input_i[0])[0]
 
         loss = (output_i - label_i)**2
 
@@ -147,7 +149,7 @@ class BasicLSTM(pl.LightningModule):
 
     def test_step(self, batch, batch_idx):
         input_i, label_i = batch
-        output_i, h_i, c_i, x_i = self.forward(input_i[0])
+        output_i = self.forward(input_i[0])[0]
 
         test_loss = (output_i - label_i)**2
 
@@ -158,8 +160,33 @@ class BasicLSTM(pl.LightningModule):
 
         return self(batch)
     
+    
+    def makepred(self, dataset):
+        y = []
+        t = []
 
-def test():
+        h_hist=[]
+        c_hist=[]
+        x_hist=[]
+
+        for ii in dataset:
+            feat, lab = ii
+
+            y_i, h_i, c_i, x_i = self.forward(feat)
+
+            y_i = (y_i.detach().numpy())
+
+            y.append(y_i)
+            t.append(lab.numpy())
+            h_hist.append(h_i)
+            c_hist.append(c_i)
+            x_hist.append(x_i)
+
+
+        return y, t, h_hist, c_hist, x_hist
+   
+
+def test_training():
     ## create the training data for the neural network.
     inputs = torch.tensor([[[0., 0.5, 0.25, 1.]], [[1., 0.5, 0.25, 1.]]])
     labels = torch.tensor([0., 1.])
@@ -169,9 +196,9 @@ def test():
 
     mdl_simple = BasicLSTM(num_feat=1, num_hiddens=1, num_out=1, lr=0.01)
     print("Company A: Observed = 0, Predicted =", 
-        mdl_simple(torch.tensor([[0., 0.5, 0.25, 1.]])).detach())
+        mdl_simple(torch.tensor([[0., 0.5, 0.25, 1.]]))[0].detach())
     print("Company B: Observed = 1, Predicted =", 
-        mdl_simple(torch.tensor([[1., 0.5, 0.25, 1.]])).detach())
+        mdl_simple(torch.tensor([[1., 0.5, 0.25, 1.]]))[0].detach())
 
 
     logger = TensorBoardLogger("lightning_logs", name="simpleModel")
@@ -180,9 +207,45 @@ def test():
     trainer_simple.fit(mdl_simple, train_dataloaders=dataloader)
 
     print("Company A: Observed = 0, Predicted =", 
-      mdl_simple(torch.tensor([[0., 0.5, 0.25, 1.]])).detach())
+      mdl_simple(torch.tensor([[0., 0.5, 0.25, 1.]]))[0].detach())
     print("Company B: Observed = 1, Predicted =", 
-        mdl_simple(torch.tensor([[1., 0.5, 0.25, 1.]])).detach())
+        mdl_simple(torch.tensor([[1., 0.5, 0.25, 1.]]))[0].detach())
+    
+    print('saving model')
+
+    torch.save(mdl_simple.state_dict(), './lstm/simple_model_testing')
+
+
+
+def test_outputs():
+
+    output_model = BasicLSTM(num_feat=1, num_hiddens=1, num_out=1, lr=0.01)
+
+    output_model.load_state_dict(torch.load('./lstm/simple_model_testing'))
+
+    print('Loaded Model')
+
+    # print("Company A: Observed = 0, Predicted =", 
+    #     output_model(torch.tensor([[0., 0.5, 0.25, 1.]]))[0].detach())
+    # print("Company B: Observed = 1, Predicted =", 
+    #     output_model(torch.tensor([[1., 0.5, 0.25, 1.]]))[0].detach())
+    
+    ## create the training data for the neural network.
+    inputs = torch.tensor([[[0., 0.5, 0.25, 1.]], [[1., 0.5, 0.25, 1.]]])
+    labels = torch.tensor([0., 1.])
+
+    dataset = TensorDataset(inputs, labels) 
+    dataloader = DataLoader(dataset)
+
+    y, t, h_hist, c_hist, x_hist = output_model.makepred(dataset)
+
+    print('short mem ', y)
+    print('label ', t)
+    print('h history ', h_hist)
+    print('c history ', c_hist)
+    print('x history ', x_hist)
     
 if __name__ == "__main__":
-    test()
+    test_training()
+
+    test_outputs()
