@@ -10,6 +10,8 @@ import tensorboard
 
 import numpy as np
 
+
+
 class BasicLSTM(pl.LightningModule):
 
     def __init__(self, num_feat, num_hiddens, num_out, lr):
@@ -116,9 +118,14 @@ class BasicLSTM(pl.LightningModule):
         long_mem = torch.zeros(self.num_hiddens)
         short_mem = torch.zeros(self.num_hiddens)
         
-        h_hist=np.zeros(n_seq)
-        c_hist=np.zeros(n_seq)
-        x_hist=np.zeros(n_seq)
+        h_hist=np.zeros(n_seq+1)
+        c_hist=np.zeros(n_seq+1)
+        x_hist=np.zeros((input.shape[0], n_seq))
+
+        h_hist[0] = short_mem
+        c_hist[0] = long_mem
+
+        
 
         for ii in range(0,n_seq):
 
@@ -126,9 +133,10 @@ class BasicLSTM(pl.LightningModule):
                                                     long_mem, 
                                                     short_mem,
                                                     )
-            h_hist[ii] = (short_mem.detach().numpy())
-            c_hist[ii] = (long_mem.detach().numpy())
-            x_hist[ii] = (input[:,ii].numpy())
+
+            h_hist[ii+1] = short_mem.detach().numpy()
+            c_hist[ii+1] = long_mem.detach().numpy()
+            x_hist[:,ii] = input[:,ii].numpy()
 
         return short_mem, h_hist, c_hist, x_hist
 
@@ -218,7 +226,6 @@ def test_training():
 
 
 def test_outputs():
-
     output_model = BasicLSTM(num_feat=1, num_hiddens=1, num_out=1, lr=0.01)
 
     output_model.load_state_dict(torch.load('./lstm/simple_model_testing'))
@@ -244,8 +251,53 @@ def test_outputs():
     print('h history ', h_hist)
     print('c history ', c_hist)
     print('x history ', x_hist)
-    
-if __name__ == "__main__":
-    test_training()
 
-    test_outputs()
+
+
+def stock_test():
+    import sys
+    # caution: path[0] is reserved for script path (or '' in REPL)
+    sys.path.insert(1, r'D:\Documents\GitHub\itcs-8156\utils')
+    # sys.path.insert(1, r'H:\My Drive\SP23\ML\envs\groupWork\utils')
+
+
+    from preprocessing import (market_prepro,
+                            lstm_timeseries_feat_and_targ,
+                            )
+    # st = "Stocks"
+    st = "ETFs"
+
+    #Input stock name
+    sn = "aadr" 
+    f = r'D:\Desktop\College Spring 2023\machineLearning\project\coding\data'
+    # f = r'H:\My Drive\stockMarket_data'
+    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False,splitdata=True, stdzr='minmax')
+
+    print(X_train.shape)
+    print(T_train.shape)
+
+    #number of days as features
+    day_feat = 2
+
+    #number of days to use as features
+    day_targ = 1
+    day_targ = day_targ - 1
+
+    dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train, T_train, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
+    dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
+
+    mdl_stock = BasicLSTM(num_feat=7, num_hiddens=1, num_out=1, lr=0.01)
+
+    short, h_hist, c_hist, x_hist = mdl_stock.forward(ds_train[0][0])
+
+    print('short ', short)
+    print('h_hist ', h_hist)
+    print('c_hist ', c_hist)
+    print('x_hist \n', x_hist)
+        
+if __name__ == "__main__":
+    # test_training()
+
+    # test_outputs()
+
+    stock_test()
