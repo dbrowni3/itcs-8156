@@ -9,6 +9,7 @@ from pytorch_lightning.loggers import TensorBoardLogger as TensorBoardLogger
 import tensorboard
 
 import numpy as np
+import shap
 
 
 
@@ -84,7 +85,8 @@ class BasicLSTM(pl.LightningModule):
 
         
         '''
-        val_in = val_in.float()
+        if (isinstance(val_in, np.ndarray) == False):
+            val_in = val_in.float()
 
         i_t = torch.sigmoid((self.wi1@val_in)+(self.wi2@short_mem)+(self.bi))
 
@@ -113,6 +115,7 @@ class BasicLSTM(pl.LightningModule):
         in order case input should be an array with multiple inputs for the model.
         The columns are the features and the rows are the days
         '''
+
         n_seq = np.shape(input)[-1]
 
         long_mem = torch.zeros(self.num_hiddens)
@@ -121,7 +124,6 @@ class BasicLSTM(pl.LightningModule):
         h_hist=np.zeros(n_seq+1)
         c_hist=np.zeros(n_seq+1)
         x_hist=np.zeros((input.shape[0], n_seq))
-
         h_hist[0] = short_mem
         c_hist[0] = long_mem
 
@@ -135,6 +137,7 @@ class BasicLSTM(pl.LightningModule):
                                                     )
 
             h_hist[ii+1] = short_mem.detach().numpy()
+
             c_hist[ii+1] = long_mem.detach().numpy()
             x_hist[:,ii] = input[:,ii].numpy()
 
@@ -192,6 +195,25 @@ class BasicLSTM(pl.LightningModule):
 
 
         return y, t, h_hist, c_hist, x_hist
+
+        
+    def makepredshap(self, x_input):
+        targets = np.zeros((np.shape(x_input)[0],1))
+
+        features = torch.from_numpy(x_input)    
+        targets = torch.from_numpy(targets) 
+
+        dataset = TensorDataset(features, targets)
+        print('print shap dataset ', dataset)
+
+        for ii in dataset:
+            feat, lab = ii
+
+            y_i, h_i, c_i, x_i = self.forward(feat)
+
+            y = (y_i.detach().numpy())
+
+        return y
    
 
 def test_training():
@@ -254,7 +276,8 @@ def test_outputs():
 
 
 
-def stock_test():
+
+def getstockdata():
     import sys
     # caution: path[0] is reserved for script path (or '' in REPL)
     sys.path.insert(1, r'D:\Documents\GitHub\itcs-8156\utils')
@@ -273,8 +296,7 @@ def stock_test():
     # f = r'H:\My Drive\stockMarket_data'
     X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False,splitdata=True, stdzr='minmax')
 
-    print(X_train.shape)
-    print(T_train.shape)
+    # X,T = market_prepro(f,st,sn,False,splitdata=False)
 
     #number of days as features
     day_feat = 2
@@ -283,21 +305,61 @@ def stock_test():
     day_targ = 1
     day_targ = day_targ - 1
 
+    # dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train[['Open','Low']], T_train, 4, 1,None)
+    # dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test[['Open','Low']], T_test, 4, 1,  None)
+
     dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train, T_train, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
     dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
 
+    return dl_train, ds_train, dl_test, ds_test
+
+def trainstockmodel():
+
+    dl_train, ds_train, dl_test, ds_test = getstockdata()
+
     mdl_stock = BasicLSTM(num_feat=7, num_hiddens=1, num_out=1, lr=0.01)
 
-    short, h_hist, c_hist, x_hist = mdl_stock.forward(ds_train[0][0])
+    logger = TensorBoardLogger("lightning_logs", name="market")
 
-    print('short ', short)
-    print('h_hist ', h_hist)
-    print('c_hist ', c_hist)
-    print('x_hist \n', x_hist)
+    trainer = pl.Trainer(max_epochs=10,logger=logger) # with default learning rate, 0.001 (this tiny learning rate makes learning slow)
+    trainer.fit(mdl_stock, train_dataloaders=dl_train)
+
+    torch.save(mdl_stock.state_dict(), './lstm/stock_model')
+
+
+
+def testshap():
+
+    
+    mdl_stock = BasicLSTM(num_feat=7, num_hiddens=1, num_out=1, lr=0.01)
+
+    mdl_stock.load_state_dict(torch.load('./lstm/stock_model'))
+
+    print('Loaded Model')
+
+    dl_train, ds_train, dl_test, ds_test = getstockdata()
+
+    f,t = ds_test[0:2]
+
+    f = f.numpy()
+    t = t.numpy()
+
+    # data_test = next(iter(dl_test))[0].numpy()
+    print('data test \n', f)
+    print('targ \n', t)
+
+
+
+
+
+    explainer = shap.KernelExplainer(model=mdl_stock.makepredshap, data=f, link="identity")
+
         
 if __name__ == "__main__":
     # test_training()
 
     # test_outputs()
 
-    stock_test()
+    # trainstockmodel()
+
+    testshap()

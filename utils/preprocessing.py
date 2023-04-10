@@ -298,7 +298,9 @@ def lstm_timeseries_feat_and_targ(df_feat, df_targ, offset_back, offset_for, exc
             
     # transform numpy to torch
     features = torch.from_numpy(features)    
-    targets = torch.from_numpy(targets)    
+    targets = torch.from_numpy(targets) 
+    # print('feat size ', features.shape)   
+    # print('targ size ', targets.shape)   
 
     # add the data into a dataloader
     dataset = TensorDataset(features, targets)
@@ -320,9 +322,9 @@ def test():
     # dl, ds = lstm_timeseries_feat_and_targ(X, T, 3, 1,[ 'Year', 'Month' ,'Day_date', 'Day'])
 
     # dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train, T_train, 6, 1, [ 'Year', 'Month' ,'Day_date', 'Day'])
-    dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, 2, 2, [ 'Year', 'Month' ,'Day_date', 'Day'])
+    dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, 2, 0, [ 'Year', 'Month' ,'Day_date', 'Day'])
 
-    print(ds_test[-1])
+    # print(ds_test[-1])
     # print(ds_train[-6])
 
 
@@ -331,8 +333,8 @@ def test():
     
     # print(X_test.head(10))
     # print(T_test.head(10))
-    print(X_test.tail(10))
-    print(T_test.tail(10))
+    # print(X_test.tail(10))
+    # print(T_test.tail(10))
     # print(np.where(T == np.min(T)))
 
     # print(ds.shape)
