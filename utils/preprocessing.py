@@ -33,14 +33,12 @@ def del_OI(df_sorted):
     
     return df_dropped
 
-def std_vol(df_dropped, stdzr):
+def std_values(df, stdzr):
     
-    scaled_features = df_dropped.copy()
-    col_names = df_dropped.columns.values
+    scaled_features = df.copy()
+    col_names = df.columns.values
     col_names = np.delete(col_names,np.argwhere(col_names=='Date'))
 
-    # col_names = np.delete(col_names,np.argwhere(col_names=='Close'))
-    # col_names = ['Volume']
     features = scaled_features[col_names]
     if (stdzr == 'standard'):
         scaler = StandardScaler().fit(features.values)
@@ -49,7 +47,6 @@ def std_vol(df_dropped, stdzr):
 
     features = scaler.transform(features.values)
     scaled_features[col_names] = features
-    
     
     df_scaled = scaled_features
     
@@ -113,10 +110,24 @@ def near_end_quart(df_added):
 
     return df_added
 
-def split_data(df_end_quart):
+def split_data(df):
 
-    X = df_end_quart.drop(labels=["Close"], axis=1)
-    T = df_end_quart["Close"]
+    X = df.drop(labels=["Close"], axis=1)
+    T = df["Close"]
+
+    tss = TimeSeriesSplit(n_splits = 2)
+
+    for train_indx, test_indx in tss.split(X):
+    
+        X_train, X_test = X.iloc[train_indx, :], X.iloc[test_indx,:]
+        T_train, T_test = T.iloc[train_indx], T.iloc[test_indx] 
+
+    return X_train, X_test, T_train, T_test
+
+def split_data_validate(df, target_label):
+
+    X = df.drop(labels=[target_label], axis=1)
+    T = df[target_label]
 
     tss = TimeSeriesSplit(n_splits = 2)
 
@@ -130,7 +141,7 @@ def split_data(df_end_quart):
 def  market_prepro(f,st,sn, verbose=False, splitdata=True, stdzr='minmax'):
     df = get_data(f,st,sn) #get the dataset imported 
     df_dropped = del_OI(df)
-    df_scaled = std_vol(df_dropped,stdzr)
+    df_scaled = std_values(df_dropped,stdzr)
     df_added = get_daily_deltas(df_scaled)
     df_end_quart = near_end_quart(df_added)
 

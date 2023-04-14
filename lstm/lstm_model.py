@@ -310,6 +310,10 @@ def getstockdata():
 
     dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train, T_train, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
     dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, day_feat, day_targ, [ 'Year', 'Month' ,'Day_date', 'Day'])
+    print('ds_train')
+    print(ds_train[0])
+
+
 
     return dl_train, ds_train, dl_test, ds_test
 
@@ -317,14 +321,14 @@ def trainstockmodel():
 
     dl_train, ds_train, dl_test, ds_test = getstockdata()
 
-    mdl_stock = BasicLSTM(num_feat=7, num_hiddens=1, num_out=1, lr=0.01)
+    # mdl_stock = BasicLSTM(num_feat=7, num_hiddens=1, num_out=1, lr=0.01)
 
-    logger = TensorBoardLogger("lightning_logs", name="market")
+    # logger = TensorBoardLogger("lightning_logs", name="market")
 
-    trainer = pl.Trainer(max_epochs=10,logger=logger) # with default learning rate, 0.001 (this tiny learning rate makes learning slow)
-    trainer.fit(mdl_stock, train_dataloaders=dl_train)
+    # trainer = pl.Trainer(max_epochs=10,logger=logger) # with default learning rate, 0.001 (this tiny learning rate makes learning slow)
+    # trainer.fit(mdl_stock, train_dataloaders=dl_train)
 
-    torch.save(mdl_stock.state_dict(), './lstm/stock_model')
+    # torch.save(mdl_stock.state_dict(), './lstm/stock_model')
 
 
 
@@ -360,6 +364,6 @@ if __name__ == "__main__":
 
     # test_outputs()
 
-    # trainstockmodel()
+    trainstockmodel()
 
-    testshap()
+    # testshap()
