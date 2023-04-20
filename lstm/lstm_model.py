@@ -257,6 +257,162 @@ class BasicLSTM(pl.LightningModule):
             y = (y_i.detach().numpy())
 
         return y
+
+class matrixLSTM(pl.LightningModule):
+
+    def __init__(self, num_feat, num_hiddens, num_out, lr):
+        '''
+        num_feat - number of features input into the model
+        '''
+        super().__init__()
+        self.num_feat = num_feat
+        self.num_hiddens = num_hiddens
+        self.num_out = num_out
+
+        self.lr = lr
+
+        shape_w1 = (num_hiddens,num_feat)
+        shape_w2 = (num_hiddens,num_hiddens)
+        
+        mean = 0.0
+        std = 1.0
+
+
+        # self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0, self.bias_hh_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
+        self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
+
+        # print('wf1 \n', self.wf1.shape, '\n wf2 \n', self.wf2.shape, '\n bf \n', self.bf.shape)
+        # print('wi1 \n', self.wi1.shape, '\n wi2 \n', self.wi2.shape, '\n bi \n', self.bi.shape)
+        # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
+        # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
+
+    def initweights_matrics(self, shape_w1, shape_w2, mean, std):
+
+        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=(4,shape_w1[1])),
+                                requires_grad=True,
+                                )
+        
+        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=(4,shape_w2[1])),
+                        requires_grad=True,
+                        )
+        b1 = nn.Parameter(torch.zeros(self.num_hiddens*4),
+                                requires_grad=True,
+                                )
+        
+        # b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
+        #                         requires_grad=True,
+        #                         )
+        
+        return w1, w2, b1
+
+  
+    def unit(self, val_in, long_mem, short_mem):
+        '''
+        INPUTS:
+            val_in - input into this step of the unit x_t
+
+            long_mem - the long term memory at this step
+
+            short_mem - the short term memory at this step
+        OUTPUTS:
+
+        
+        '''
+        if (isinstance(val_in, np.ndarray) == False):
+            val_in = val_in.float()
+
+
+
+        i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem))
+
+        f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem))
+        
+        cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem))
+
+        o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem))
+        # i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem)+(self.bias_hh_l0[0]))
+
+        # f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem)+(self.bias_hh_l0[1]))
+        
+        # cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem)+(self.bias_hh_l0[2]))
+
+        # o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem)+(self.bias_hh_l0[3]))
+
+        #update the long term memory (c_t)
+        c_t = (f_t*long_mem) + (i_t*cc_t)
+
+        #update the short term memory (h_t)
+        h_t = o_t*torch.tanh(c_t)
+        
+        return [c_t, h_t]
+
+
+    def forward(self, input):
+        '''
+        in order case input should be an array with multiple inputs for the model.
+        The columns are the features and the rows are the days
+        '''
+
+        n_seq = np.shape(input)[-1]
+
+        long_mem = torch.zeros(self.num_hiddens)
+        short_mem = torch.zeros(self.num_hiddens)
+        
+
+        for ii in range(0,n_seq):
+
+            long_mem, short_mem = self.unit(input[:,ii], 
+                                                    long_mem, 
+                                                    short_mem,
+                                                    )
+
+            return short_mem
+
+
+    def configure_optimizers(self):
+        return torch.optim.NAdam(self.parameters(), lr=self.lr)
+
+    def training_step(self, batch, batch_indx):
+
+        input_i, label_i = batch
+        output_i = self.forward(input_i[0])[0]
+
+        loss = (output_i - label_i)**2
+
+        self.log("training loss", loss, logger=True)
+
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        input_i, label_i = batch
+        output_i = self.forward(input_i[0])[0]
+
+        test_loss = (output_i - label_i)**2
+
+        self.log("test_loss", test_loss, on_step=True, logger=True)
+
+
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+
+        return self(batch)
+    
+    
+    def makepred(self, dataset):
+        y = []
+        t = []
+
+        for ii in dataset:
+            feat, lab = ii
+
+            y_i = self.forward(feat)
+
+            y_i = (y_i.detach().numpy())
+
+            y.append(y_i)
+            t.append(lab.numpy())
+
+        return y, t
+
    
 
 def test_training():
