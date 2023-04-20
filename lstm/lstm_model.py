@@ -34,31 +34,42 @@ class BasicLSTM(pl.LightningModule):
 
         #the forget gate weights and bias 
         #(for f_t = sig(wf1 x_t + wf2 h_{t-1} + b_f))
-        self.wf1 ,self.wf2, self.bf = self.initWeights(shape_w1, shape_w2, mean, std)
+        self.wf1 ,self.wf2, self.bf, self.bf2 = self.initWeights(shape_w1, shape_w2, mean, std)
 
         #the input gate weights and bias
         #(for i_t = sig(wi1 x_t + wi2 h_{t-1} + b_i))
-        self.wi1, self.wi2, self.bi = self.initWeights(shape_w1, shape_w2, mean, std) 
+        self.wi1, self.wi2, self.bi, self.bi2 = self.initWeights(shape_w1, shape_w2, mean, std) 
         #the output gate weights and bias
         #(for o_t = sig(wo1 x_t + wo2 h_{t-1} + b_o))
-        self.wo1, self.wo2, self.bo = self.initWeights(shape_w1, shape_w2, mean, std)
+        self.wo1, self.wo2, self.bo, self.bo2 = self.initWeights(shape_w1, shape_w2, mean, std)
         #the candidate context weights and bias
         #(for c^'_t = sig(wcc1 x_t + wcc2 h_{t-1} + bc_c))
-        self.wcc1, self.wcc2, self.bcc = self.initWeights(shape_w1, shape_w2, mean, std)
+        self.wcc1, self.wcc2, self.bcc, self.bcc2 = self.initWeights(shape_w1, shape_w2, mean, std)
 
-        self.whq = nn.Parameter(torch.normal(mean=mean,
-                                             std=std,
-                                             size=(num_hiddens, num_out)),
-                                requires_grad=True,
-                                )
-        self.bq = nn.Parameter(torch.tensor(0.0),
-                        requires_grad=True,
-                        )
+        # self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0, self.bias_hh_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
 
         # print('wf1 \n', self.wf1.shape, '\n wf2 \n', self.wf2.shape, '\n bf \n', self.bf.shape)
         # print('wi1 \n', self.wi1.shape, '\n wi2 \n', self.wi2.shape, '\n bi \n', self.bi.shape)
         # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
         # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
+
+    def initweights_matrics(self, shape_w1, shape_w2, mean, std):
+        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=(4,shape_w1)),
+                                requires_grad=True,
+                                )
+        
+        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=(4,shape_w2)),
+                        requires_grad=True,
+                        )
+        b1 = nn.Parameter(torch.zeros(self.num_hiddens*4),
+                                requires_grad=True,
+                                )
+        
+        b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
+                                requires_grad=True,
+                                )
+        
+        return w1, w2, b1, b2
 
     def initWeights(self, shape_w1, shape_w2, mean, std):
         w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=shape_w1),
@@ -67,10 +78,14 @@ class BasicLSTM(pl.LightningModule):
         w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=shape_w2),
                                 requires_grad=True,
                                 )
-        bias = nn.Parameter(torch.zeros(self.num_hiddens),
+        b1 = nn.Parameter(torch.zeros(self.num_hiddens),
                                 requires_grad=True,
                                 )
-        return w1, w2, bias
+        
+        b2 = nn.Parameter(torch.zeros(self.num_hiddens),
+                                requires_grad=True,
+                                )
+        return w1, w2, b1, b2
 
 
     def unit(self, val_in, long_mem, short_mem):
@@ -88,26 +103,54 @@ class BasicLSTM(pl.LightningModule):
         if (isinstance(val_in, np.ndarray) == False):
             val_in = val_in.float()
 
-        i_t = torch.sigmoid((self.wi1@val_in)+(self.wi2@short_mem)+(self.bi))
+        i_t = torch.sigmoid((self.wi1@val_in)+(self.bi)+(self.wi2@short_mem)+(self.bi2))
 
-        f_t = torch.sigmoid((self.wf1@val_in)+(self.wf2@short_mem)+(self.bf))
+        f_t = torch.sigmoid((self.wf1@val_in)+(self.bf)+(self.wf2@short_mem)+(self.bf2))
         
-        o_t = torch.sigmoid((self.wo1@val_in)+(self.wo2@short_mem)+(self.bo))
+        o_t = torch.sigmoid((self.wo1@val_in)+(self.bo)+(self.wo2@short_mem)+(self.bo2))
 
-        cc_t = torch.tanh((self.wcc1@val_in)+(short_mem@short_mem)+(self.bcc))
-
-        # print('f_t ', f_t)
-        # print('i_t ', i_t)
-        # print('cc_t ', cc_t)
-        # print('o_t ', o_t)
+        cc_t = torch.tanh((self.wcc1@val_in)+(self.bcc)+(self.wcc2@short_mem)+(self.bcc2))
 
         #update the long term memory (c_t)
         c_t = (f_t*long_mem) + (i_t*cc_t)
 
         #update the short term memory (h_t)
         h_t = o_t*torch.tanh(c_t)
-
+        
         return [c_t, h_t]
+    
+    # def unit(self, val_in, long_mem, short_mem):
+    #     '''
+    #     INPUTS:
+    #         val_in - input into this step of the unit x_t
+
+    #         long_mem - the long term memory at this step
+
+    #         short_mem - the short term memory at this step
+    #     OUTPUTS:
+
+        
+    #     '''
+    #     if (isinstance(val_in, np.ndarray) == False):
+    #         val_in = val_in.float()
+
+
+
+    #     i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bi)+(self.weight_hh_l0[0]@short_mem)+(self.bi2))
+
+    #     f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bf)+(self.weight_hh_l0[1]@short_mem)+(self.bf2))
+        
+    #     cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bcc)+(self.weight_hh_l0[2]@short_mem)+(self.bcc2))
+
+    #     o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bo)+(self.weight_hh_l0[3]@short_mem)+(self.bo2))
+
+    #     #update the long term memory (c_t)
+    #     c_t = (f_t*long_mem) + (i_t*cc_t)
+
+    #     #update the short term memory (h_t)
+    #     h_t = o_t*torch.tanh(c_t)
+        
+    #     return [c_t, h_t]
 
 
     def forward(self, input):
@@ -145,7 +188,7 @@ class BasicLSTM(pl.LightningModule):
 
 
     def configure_optimizers(self):
-        return Adam(self.parameters(), lr=self.lr)
+        return torch.optim.NAdam(self.parameters(), lr=self.lr)
 
     def training_step(self, batch, batch_indx):
 
