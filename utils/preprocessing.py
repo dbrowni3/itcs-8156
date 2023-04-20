@@ -315,7 +315,7 @@ def lstm_timeseries_feat_and_targ(df_feat, df_targ, offset_back, offset_for, exc
 
     # add the data into a dataloader
     dataset = TensorDataset(features, targets)
-    dataloader = DataLoader(dataset, num_workers=2)
+    dataloader = DataLoader(dataset, num_workers=2, shuffle=False)
 
     return dataloader, dataset
 

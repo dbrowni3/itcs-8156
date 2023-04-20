@@ -53,36 +53,19 @@ class BasicLSTM(pl.LightningModule):
         # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
         # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
 
-    def initweights_matrics(self, shape_w1, shape_w2, mean, std):
-        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=(4,shape_w1)),
-                                requires_grad=True,
-                                )
-        
-        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=(4,shape_w2)),
-                        requires_grad=True,
-                        )
-        b1 = nn.Parameter(torch.zeros(self.num_hiddens*4),
-                                requires_grad=True,
-                                )
-        
-        b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
-                                requires_grad=True,
-                                )
-        
-        return w1, w2, b1, b2
 
     def initWeights(self, shape_w1, shape_w2, mean, std):
-        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=shape_w1),
+        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=shape_w1, ),
                                 requires_grad=True,
                                 )
-        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=shape_w2),
+        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=shape_w2, ),
                                 requires_grad=True,
                                 )
-        b1 = nn.Parameter(torch.zeros(self.num_hiddens),
+        b1 = nn.Parameter(torch.zeros(self.num_hiddens, ),
                                 requires_grad=True,
                                 )
         
-        b2 = nn.Parameter(torch.zeros(self.num_hiddens),
+        b2 = nn.Parameter(torch.zeros(self.num_hiddens,),
                                 requires_grad=True,
                                 )
         return w1, w2, b1, b2
@@ -119,40 +102,6 @@ class BasicLSTM(pl.LightningModule):
         
         return [c_t, h_t]
     
-    # def unit(self, val_in, long_mem, short_mem):
-    #     '''
-    #     INPUTS:
-    #         val_in - input into this step of the unit x_t
-
-    #         long_mem - the long term memory at this step
-
-    #         short_mem - the short term memory at this step
-    #     OUTPUTS:
-
-        
-    #     '''
-    #     if (isinstance(val_in, np.ndarray) == False):
-    #         val_in = val_in.float()
-
-
-
-    #     i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bi)+(self.weight_hh_l0[0]@short_mem)+(self.bi2))
-
-    #     f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bf)+(self.weight_hh_l0[1]@short_mem)+(self.bf2))
-        
-    #     cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bcc)+(self.weight_hh_l0[2]@short_mem)+(self.bcc2))
-
-    #     o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bo)+(self.weight_hh_l0[3]@short_mem)+(self.bo2))
-
-    #     #update the long term memory (c_t)
-    #     c_t = (f_t*long_mem) + (i_t*cc_t)
-
-    #     #update the short term memory (h_t)
-    #     h_t = o_t*torch.tanh(c_t)
-        
-    #     return [c_t, h_t]
-
-
     def forward(self, input):
         '''
         in order case input should be an array with multiple inputs for the model.
@@ -161,9 +110,9 @@ class BasicLSTM(pl.LightningModule):
 
         n_seq = np.shape(input)[-1]
 
-        long_mem = torch.zeros(self.num_hiddens)
-        short_mem = torch.zeros(self.num_hiddens)
-        
+        long_mem = torch.zeros(self.num_hiddens, device=self.device)
+        short_mem = torch.zeros(self.num_hiddens, device=self.device)
+       
         h_hist=np.zeros(n_seq+1)
         c_hist=np.zeros(n_seq+1)
         x_hist=np.zeros((input.shape[0], n_seq))
@@ -278,8 +227,8 @@ class matrixLSTM(pl.LightningModule):
         std = 1.0
 
 
-        # self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0, self.bias_hh_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
-        self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
+        self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0, self.bias_hh_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
+        # self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
 
         # print('wf1 \n', self.wf1.shape, '\n wf2 \n', self.wf2.shape, '\n bf \n', self.bf.shape)
         # print('wi1 \n', self.wi1.shape, '\n wi2 \n', self.wi2.shape, '\n bi \n', self.bi.shape)
@@ -299,11 +248,11 @@ class matrixLSTM(pl.LightningModule):
                                 requires_grad=True,
                                 )
         
-        # b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
-        #                         requires_grad=True,
-        #                         )
+        b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
+                                requires_grad=True,
+                                )
         
-        return w1, w2, b1
+        return w1, w2, b1, b2
 
   
     def unit(self, val_in, long_mem, short_mem):
@@ -323,20 +272,21 @@ class matrixLSTM(pl.LightningModule):
 
 
 
-        i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem))
+        # i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem))
 
-        f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem))
+        # f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem))
         
-        cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem))
+        # cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem))
 
-        o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem))
-        # i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem)+(self.bias_hh_l0[0]))
+        # o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem))
 
-        # f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem)+(self.bias_hh_l0[1]))
+        i_t = torch.sigmoid((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem)+(self.bias_hh_l0[0]))
+
+        f_t = torch.sigmoid((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem)+(self.bias_hh_l0[1]))
         
-        # cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem)+(self.bias_hh_l0[2]))
+        cc_t = torch.tanh((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem)+(self.bias_hh_l0[2]))
 
-        # o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem)+(self.bias_hh_l0[3]))
+        o_t = torch.sigmoid((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem)+(self.bias_hh_l0[3]))
 
         #update the long term memory (c_t)
         c_t = (f_t*long_mem) + (i_t*cc_t)
