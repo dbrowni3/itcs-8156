@@ -1,0 +1,59 @@
+import sys
+import tqdm as notebook_tqdm
+# caution: path[0] is reserved for script path (or '' in REPL)
+sys.path.insert(1, r'D:\Documents\GitHub\itcs-8156\utils')
+sys.path.insert(1, r'D:\Documents\GitHub\itcs-8156\lstm')
+# sys.path.insert(1, r'H:\My Drive\SP23\ML\envs\groupWork\utils')
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import tensorboard
+from pytorch_lightning.loggers import TensorBoardLogger as TensorBoardLogger
+import pytorch_lightning as pl
+
+
+plt.style.use('ggplot')
+
+%load_ext autoreload
+%autoreload 2
+
+import preprocessing as pp
+from preprocessing import (market_prepro,
+                           lstm_timeseries_feat_and_targ,
+                           
+)
+
+from lstm_model import BasicLSTM
+
+df_sb = pd.read_csv('SBUX.csv', index_col='Date', parse_dates=True)
+
+display(df_sb)
+
+df_sb['Volume'].plot(title='Starbucks Sales Volume')
+
+%autoreload 2
+
+def processdata(df, day_feat, day_targ):
+    df_scaled = pp.std_values(df, 'minmax')
+
+    X_train, X_test, T_train, T_test = pp.split_data_validate(df_scaled, 'Volume')
+
+    dl_train, ds_train = pp.lstm_timeseries_feat_and_targ(X_train, T_train, day_feat, day_targ, None )
+    dl_test, ds_test = pp.lstm_timeseries_feat_and_targ(X_test, T_test, day_feat, day_targ, None)
+
+    return dl_train, ds_train, dl_test, ds_test
+
+dl_train, ds_train, dl_test, ds_test = processdata(df_sb, 3, 0)
+
+def train_model(model, data, epochs, logger_name):
+    logger = TensorBoardLogger("lightning_logs", name=logger_name)
+    trainer = pl.Trainer(max_epochs=epochs,logger=logger)
+
+    trainer.fit(model, train_dataloaders=data)
+
+our_model = BasicLSTM(num_feat=5, num_hiddens=1, num_out=1, lr=0.01)
+
+train_model(our_model, dl_train, 1, 'our_model')
