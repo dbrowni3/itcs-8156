@@ -215,3 +215,19 @@ class BasicLSTM(pl.LightningModule):
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
 
         return self(batch)
+
+    def makepred(self, dataset):
+        y = []
+        t = []
+
+        for ii in dataset:
+            feat, lab = ii
+
+            y_i = self.forward(feat)
+
+            y_i = (y_i.detach().numpy())
+
+            y.append(y_i)
+            t.append(lab.numpy())
+
+        return y, t
