@@ -29,47 +29,27 @@ class BasicLSTM(pl.LightningModule):
         mean = 0.0
         std = 1.0
 
+        self.weight_ih_l0, self.weight_hh_l0, self.bias_ih_l0, self.bias_hh_l0 = self.initweights_matrics(shape_w1, shape_w2, mean, std)
 
+    def initweights_matrics(self, shape_w1, shape_w2, mean, std):
 
-        #the forget gate weights and bias 
-        #(for f_t = sig(wf1 x_t + wf2 h_{t-1} + b_f))
-        self.wf1 ,self.wf2, self.bf = self.initWeights(shape_w1, shape_w2, mean, std)
-
-        #the input gate weights and bias
-        #(for i_t = sig(wi1 x_t + wi2 h_{t-1} + b_i))
-        self.wi1, self.wi2, self.bi = self.initWeights(shape_w1, shape_w2, mean, std) 
-        #the output gate weights and bias
-        #(for o_t = sig(wo1 x_t + wo2 h_{t-1} + b_o))
-        self.wo1, self.wo2, self.bo = self.initWeights(shape_w1, shape_w2, mean, std)
-        #the candidate context weights and bias
-        #(for c^'_t = sig(wcc1 x_t + wcc2 h_{t-1} + bc_c))
-        self.wcc1, self.wcc2, self.bcc = self.initWeights(shape_w1, shape_w2, mean, std)
-
-        self.whq = nn.Parameter(torch.normal(mean=mean,
-                                             std=std,
-                                             size=(num_hiddens, num_out)),
+        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=(4,shape_w1[1])),
                                 requires_grad=True,
                                 )
-        self.bq = nn.Parameter(torch.tensor(0.0),
+        
+        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=(4,shape_w2[1])),
                         requires_grad=True,
                         )
-
-        # print('wf1 \n', self.wf1.shape, '\n wf2 \n', self.wf2.shape, '\n bf \n', self.bf.shape)
-        # print('wi1 \n', self.wi1.shape, '\n wi2 \n', self.wi2.shape, '\n bi \n', self.bi.shape)
-        # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
-        # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
-
-    def initWeights(self, shape_w1, shape_w2, mean, std):
-        w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=shape_w1),
+        b1 = nn.Parameter(torch.zeros(self.num_hiddens*4),
                                 requires_grad=True,
                                 )
-        w2 = nn.Parameter(torch.normal(mean=mean,std=std,size=shape_w2),
+        
+        b2 = nn.Parameter(torch.zeros(self.num_hiddens*4),
                                 requires_grad=True,
                                 )
-        bias = nn.Parameter(torch.zeros(self.num_hiddens),
-                                requires_grad=True,
-                                )
-        return w1, w2, bias
+        
+        return w1, w2, b1, b2
+    
     
     def actfunc(self, X, act_name, B=0.5):
         '''
@@ -146,20 +126,22 @@ class BasicLSTM(pl.LightningModule):
 
             short_mem - the short term memory at this step
         OUTPUTS:
+            c_t - long term memory
 
-        
+            h_t - short term memory   
         '''
-        val_in = val_in.float()
 
-        i_t = self.actfunc((self.wi1@val_in)+(self.wi2@short_mem)+(self.bi), self.act_name_1)
+        if (isinstance(val_in, np.ndarray) == False):
+            val_in = val_in.float()
 
-        f_t = self.actfunc((self.wf1@val_in)+(self.wf2@short_mem)+(self.bf), self.act_name_1)
+        i_t = self.actfunc((self.weight_ih_l0[0,:]@val_in)+(self.bias_ih_l0[0])+(self.weight_hh_l0[0]@short_mem)+(self.bias_hh_l0[0]), self.act_name_1)
+
+        f_t = self.actfunc((self.weight_ih_l0[1,:]@val_in)+(self.bias_ih_l0[1])+(self.weight_hh_l0[1]@short_mem)+(self.bias_hh_l0[1]), self.act_name_1)
         
-        o_t = self.actfunc((self.wo1@val_in)+(self.wo2@short_mem)+(self.bo), self.act_name_1)
+        cc_t = self.actfunc((self.weight_ih_l0[2,:]@val_in)+(self.bias_ih_l0[2])+(self.weight_hh_l0[2]@short_mem)+(self.bias_hh_l0[2]), self.act_name_1)
 
-        cc_t = self.actfunc((self.wcc1@val_in)+(short_mem@short_mem)+(self.bcc), self.act_name_2)
+        o_t = self.actfunc((self.weight_ih_l0[3,:]@val_in)+(self.bias_ih_l0[3])+(self.weight_hh_l0[3]@short_mem)+(self.bias_hh_l0[3]), self.act_name_2)
 
-        
 
         # print('f_t ', f_t)
         # print('i_t ', i_t)
@@ -173,11 +155,8 @@ class BasicLSTM(pl.LightningModule):
         h_t = o_t*self.actfunc(c_t, self.act_name_2)
         # print('update_short_mem.shape, ', update_short_mem.shape)
 
-        #for multiple inputs we not do a final layer that is just linear
-        # Y = (h_t@self.whq) + self.bq
-        Y = h_t
 
-        return [Y, c_t, h_t]
+        return [c_t, h_t]
 
     def forward(self, input):
         '''
@@ -192,19 +171,15 @@ class BasicLSTM(pl.LightningModule):
         short_mem = torch.zeros(self.num_hiddens)
         
         for ii in range(0,n_seq):
-            # long_mem[ii+1], short_mem[ii+1] = self.unit(input[ii], 
-            #                                         long_mem[ii], 
-            #                                         short_mem[ii],
-            #                                         )
-            # print(input[:,ii])
-            Y, long_mem, short_mem = self.unit(input[:,ii], 
+            long_mem, short_mem = self.unit(input[:,ii], 
                                                     long_mem, 
                                                     short_mem,
                                                     )
-        return Y
+        return short_mem
 
 
     def configure_optimizers(self):
+        #return torch.optim.NAdam(self.parameters(), lr=self.lr)
         return Adam(self.parameters(), lr=self.lr)
 
     def training_step(self, batch, batch_indx):
