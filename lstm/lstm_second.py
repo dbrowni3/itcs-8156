@@ -125,13 +125,12 @@ class BasicLSTM(pl.LightningModule):
             y1 =  X* n(m(X))
 
         elif act_name == 'Comb-H-Sine':
-            n = torch.asinh()
-            y1 = (B*X) + n(B*X)
+            y1 = (B*X) + torch.arcsinh(B*X)
 
 
 
-        else:
-            raise Exception('No activation function specified')
+        #else:
+            #raise Exception('No activation function specified')
         
         return y1
 
