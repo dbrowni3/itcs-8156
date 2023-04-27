@@ -8,6 +8,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import TensorBoardLogger as TensorBoardLogger
 import tensorboard
 
+
 import numpy as np
 import shap
 
@@ -53,6 +54,13 @@ class BasicLSTM(pl.LightningModule):
         # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
         # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
 
+    def custom_histogram_adder(self):
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                self.logger.experiment.add_histogram(name,param,self.current_epoch)
+    def on_train_epoch_end(self):
+        
+        self.custom_histogram_adder()
 
     def initWeights(self, shape_w1, shape_w2, mean, std):
         w1 = nn.Parameter(torch.normal(mean=mean,std=std, size=shape_w1, ),
@@ -146,7 +154,7 @@ class BasicLSTM(pl.LightningModule):
 
         loss = (output_i - label_i)**2
 
-        self.log("training loss", loss, logger=True)
+        self.log("training loss", loss, on_step = True, on_epoch = True, logger=True)
 
         return loss
 
@@ -234,6 +242,14 @@ class matrixLSTM(pl.LightningModule):
         # print('wi1 \n', self.wi1.shape, '\n wi2 \n', self.wi2.shape, '\n bi \n', self.bi.shape)
         # print('wcc1 \n', self.wf1.shape, '\n wcc2 \n', self.wf2.shape, '\n bf \n', self.bcc.shape)
         # print('wo1 \n', self.wo1.shape, '\n wo2 \n', self.wo2.shape, '\n bo \n', self.bo.shape)
+        
+    def custom_histogram_adder(self):
+        for name, param in self.named_parameters():
+            if param.requires_grad:
+                self.logger.experiment.add_histogram(name,param,self.current_epoch)
+    def on_train_epoch_end(self):
+        
+        self.custom_histogram_adder()
 
     def initweights_matrics(self, shape_w1, shape_w2, mean, std):
 
@@ -329,7 +345,7 @@ class matrixLSTM(pl.LightningModule):
 
         loss = (output_i - label_i)**2
 
-        self.log("training loss", loss, logger=True)
+        self.log("training loss", loss,on_step = True, on_epoch = True, logger=True)
 
         return loss
 
