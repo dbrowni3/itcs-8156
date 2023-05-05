@@ -12,6 +12,11 @@ import seaborn as sns # statistical plotting
 from datetime import datetime # Convert Datetime 
 from sklearn.model_selection import TimeSeriesSplit, train_test_split # for linear model
 from sklearn.preprocessing import StandardScaler #for scaling data
+from sklearn.preprocessing import MinMaxScaler #for scaling data
+
+from torch.utils.data import TensorDataset, DataLoader
+import torch
+
 
 
 
@@ -28,15 +33,20 @@ def del_OI(df_sorted):
     
     return df_dropped
 
-def std_vol(df_dropped):
+def std_vol(df_dropped, stdzr):
     
     scaled_features = df_dropped.copy()
     col_names = df_dropped.columns.values
     col_names = np.delete(col_names,np.argwhere(col_names=='Date'))
-    col_names = np.delete(col_names,np.argwhere(col_names=='Close'))
+
+    # col_names = np.delete(col_names,np.argwhere(col_names=='Close'))
     # col_names = ['Volume']
     features = scaled_features[col_names]
-    scaler = StandardScaler().fit(features.values)
+    if (stdzr == 'standard'):
+        scaler = StandardScaler().fit(features.values)
+    elif (stdzr == 'minmax'):
+        scaler = MinMaxScaler().fit(features.values)
+
     features = scaler.transform(features.values)
     scaled_features[col_names] = features
     
@@ -117,13 +127,13 @@ def split_data(df_end_quart):
 
     return X_train, X_test, T_train, T_test
 
-def  market_prepro(f,st,sn,verbose=False):
+def  market_prepro(f,st,sn, verbose=False, splitdata=True, stdzr='minmax'):
     df = get_data(f,st,sn) #get the dataset imported 
     df_dropped = del_OI(df)
-    df_scaled = std_vol(df_dropped)
+    df_scaled = std_vol(df_dropped,stdzr)
     df_added = get_daily_deltas(df_scaled)
     df_end_quart = near_end_quart(df_added)
-    X_train, X_test, T_train, T_test = split_data(df_end_quart)
+
 
     if verbose == True:
         print(df_end_quart.head())
@@ -138,7 +148,13 @@ def  market_prepro(f,st,sn,verbose=False):
         sns.pairplot(df_end_quart)
         plt.show()
 
-    return X_train, X_test, T_train, T_test
+    if (splitdata == True):
+        X_train, X_test, T_train, T_test = split_data(df_end_quart)
+        return X_train, X_test, T_train, T_test
+    else:
+        X = df_end_quart.drop(labels=["Close"], axis=1)
+        T = df_end_quart["Close"]
+        return X, T
 
 
 def structure_timeseries_features(df,offset_back, offset_for,exclude):
@@ -211,6 +227,86 @@ def structure_timeseries_targets(df,offset_back, offset_for):
     return df_out
 
 
+
+
+def lstm_timeseries_feat_and_targ(df_feat, df_targ, offset_back, offset_for, exclude):
+    '''
+    This takes a dataframe and creates new columns that contain the data from
+    previous days so that time series forecasting can occur.
+
+    INPUTS:
+        df - dataframe: input data
+
+        offset_back - int: the number of days to go back. This include the current day
+                            current day + (offset_back - 1 ) = offset_back
+
+        offset_for - int: the number of days to go forwards. This creates this many
+                        new columns
+
+        exclude - list str: list of columns to exclude from the time series 
+                            expansion
+
+    OUTPUTS:
+        dataloader - dataframe: dataframe with new columns
+    '''
+    if (exclude != None and isinstance(df_feat,pd.DataFrame)):
+        df_feat = df_feat.drop(exclude, axis=1)
+
+
+
+    #the offset number includes the current day so for an offset_back = 2
+    #you only need the current day and one day back. So I am going to switch it to
+    #offset_back = offset_back - 1
+
+    #get the number of samples that will be created. trim off the ends that
+    #can't be used
+    num_samps = len(df_feat)-(offset_back-1)-offset_for
+    indx_end = len(df_feat)
+    # print('num samples ,' ,num_samps)
+    # print('num samples raw ,' , len(df_feat))
+
+    #get the number of features
+    if isinstance(df_feat,pd.Series):
+        num_feats = 1
+    else:
+        num_feats = len(df_feat.columns)
+
+    #init the feature and target arrays
+    features = np.zeros((num_samps, num_feats, offset_back))
+    targets =  np.zeros((num_samps, offset_for+1))
+
+    # print('features.shape ', features.shape)
+    # print('targets.shape ', targets.shape)
+
+    for ii, dd in enumerate(range(offset_back-1, indx_end-offset_for)):
+  
+        if isinstance(df_feat,pd.Series):
+            feat_temp = df_feat.iloc[dd-offset_back+1:dd+1].to_numpy().T
+        else:
+            feat_temp = df_feat.iloc[dd-offset_back+1:dd+1,:].to_numpy().T
+
+        if (offset_for == 0):
+            targ_temp = df_targ.iloc[dd]
+        else:
+            targ_temp = df_targ.iloc[dd:dd+offset_for+1].to_numpy()
+
+        features[ii, :, :] = feat_temp
+        targets[ii, :] = targ_temp
+
+    # print('dd = ',dd)
+    # print('ii = ',ii)
+            
+    # transform numpy to torch
+    features = torch.from_numpy(features)    
+    targets = torch.from_numpy(targets)    
+
+    # add the data into a dataloader
+    dataset = TensorDataset(features, targets)
+    dataloader = DataLoader(dataset, num_workers=2)
+
+    return dataloader, dataset
+
+
 def test():
     # st = "Stocks"
     st = "ETFs"
@@ -218,10 +314,30 @@ def test():
     #Input stock name
     sn = "aadr" 
     f = r'D:\Desktop\College Spring 2023\machineLearning\project\coding\data'
-    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False)
+    X_train, X_test, T_train, T_test = market_prepro(f,st,sn,False,splitdata=True)
+    # X,T = market_prepro(f,st,sn,False,splitdata=False, stdzr='minmax')
+
+    # dl, ds = lstm_timeseries_feat_and_targ(X, T, 3, 1,[ 'Year', 'Month' ,'Day_date', 'Day'])
+
+    # dl_train, ds_train = lstm_timeseries_feat_and_targ(X_train, T_train, 6, 1, [ 'Year', 'Month' ,'Day_date', 'Day'])
+    dl_test, ds_test = lstm_timeseries_feat_and_targ(X_test, T_test, 2, 2, [ 'Year', 'Month' ,'Day_date', 'Day'])
+
+    print(ds_test[-1])
+    # print(ds_train[-6])
 
 
-    print(X_train)
+
+
+    
+    # print(X_test.head(10))
+    # print(T_test.head(10))
+    print(X_test.tail(10))
+    print(T_test.tail(10))
+    # print(np.where(T == np.min(T)))
+
+    # print(ds.shape)
+
+
 
 if __name__ == "__main__":
     test()
